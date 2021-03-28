@@ -33,3 +33,10 @@ optional arguments:
   -a AUTHOR, --author AUTHOR
   
                         set the author manually (currently not working)
+
+URLs should be one of two types: a table of contents, or an actual article.
+A table of contents is a page like [this one](https://www.marxists.org/archive/lenin/works/1914/self-det/index.htm).
+Each chapter will be downloaded individually, the links at the bottom of the page will be removed, and they will be merged into a single book.
+An article is a page like [this](https://www.marxists.org/archive/lenin/works/1912/jun/17.htm), which contains the actual text.
+URLs of both types can be combined in any order. Each URL will be downloaded and made into an epub individually, then they will all be merged into a single book.
+This book will be either converted or renamed, based on the output filetype.
