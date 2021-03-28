@@ -22,7 +22,7 @@ def download_chapter(url):
     foot = next(filter(lambda e: 't2h-foot ' in e.text, comments))
     parent = foot.getparent()
     prev = foot.getprevious()
-    while prev.getnext()is not None:
+    while prev.getnext() is not None:
         parent.remove(prev.getnext())
     
     randname = rand_name()
@@ -90,6 +90,9 @@ def main():
     #parser.add_argument('-e', '--executable', help='directory of calibre executables', dest='exec')
     parser.add_argument('-t', '--title', help='set the title manually', dest='title', default=None)
     parser.add_argument('-a', '--author', help='set the author manually', dest='author', default=None)
+    parser.add_argument('-d', '--description', help='set the book descripton', default=None)
+    parser.add_argument('-g', '--tag', help='apply a tag', action='append')
+    parser.add_argument('-l', '--language', help='set language', default=None)
     parser.add_argument('url', help='urls to download', nargs='+')
     args = parser.parse_args()
     #inp = args.input
@@ -98,7 +101,9 @@ def main():
     #exec_dir = args.exec
     title = args.title
     author = args.author
-
+    description = args.description
+    tags = args.tag
+    lanugage = args.language
 
     output_extension = os.path.split(outp)[1]
 
@@ -111,6 +116,12 @@ def main():
             merge_args += ['-t', title]
         if author is not None:
             merge_args += ['-a', author]
+        for t in tags:
+            merge_args += ['-g', t]
+        if description is not None:
+            merge_args += ['-d', description]
+        if lanugage is not None:
+            merge_args += ['-l', lanugage]
         merge_args += books
         sub = subprocess.run(merge_args, stdout=subprocess.DEVNULL)
         if sub.returncode:
@@ -120,6 +131,7 @@ def main():
             os.remove(book)
     else:
         #select the single item as the merge result
+        #TODO apply metadata
         temp_name = books[0]
 
     if output_extension == '.epub':
