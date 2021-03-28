@@ -86,21 +86,23 @@ def download_book(url):
 def main():
     parser = ArgumentParser()
     parser.add_argument('-o', '--output', help='name of output file', dest='output')
-    parser.add_argument('-i', '--input', help='input urls', dest='input', action='append')
+    #parser.add_argument('-i', '--input', help='input urls', dest='input', action='append')
     #parser.add_argument('-e', '--executable', help='directory of calibre executables', dest='exec')
     parser.add_argument('-t', '--title', help='set the title manually', dest='title', default=None)
     parser.add_argument('-a', '--author', help='set the author manually', dest='author', default=None)
+    parser.add_argument('url', help='urls to download', nargs='+')
     args = parser.parse_args()
-    inp = args.input
+    #inp = args.input
+    urls = args.url
     outp = args.output or 'output.epub'
-   # exec_dir = args.exec
+    #exec_dir = args.exec
     title = args.title
     author = args.author
 
 
     output_extension = os.path.split(outp)[1]
 
-    books = [download_book(i) for i in inp]
+    books = [download_book(i) for i in urls]
     if len(books) > 1:
         temp_name = rand_name() + '.epub'
         merge_args = ['calibre-debug', '--run-plugin', 'EpubMerge', '--',
@@ -116,6 +118,9 @@ def main():
             raise Exception('final merge returned {}'.format(sub.returncode))
         for book in books:
             os.remove(book)
+    else:
+        #select the single item as the merge result
+        temp_name = books[0]
 
     if output_extension == '.epub':
         os.rename(temp_name, outp)
