@@ -11,8 +11,9 @@ import os.path
 from queue import SimpleQueue, Empty
 
 class TaskItems:
-    def __init__(self, errors404: SimpleQueue):
+    def __init__(self, errors404: SimpleQueue, store_images: bool =False):
         self.errors404 = errors404
+        self.store_images = store_images
 
 def rand_name():
     return '%030x' % random.randrange(16**30)
@@ -110,15 +111,21 @@ def main(cli_args):
     parser = ArgumentParser()
     parser.add_argument('-o', '--output', help='output file name', type=str)
     parser.add_argument('-t', '--title', help='ebook title', type=str)
+    parser.add_argument('-a', '--author', help='ebook author', type=str)
     parser.add_argument('-g', '--tag', help='apply a tag', action='append')
+    parser.add_argument('-I', '--images', help='also attempt to download any images', action='store_true')
+    parser.add_argument('-C', '--auto-cover', help='generate an automatic cover', action='store_true', dest='cover')
     parser.add_argument('url', help='url to download', nargs='+')
     #args = parser.parse_args(cli_args)
     args = parser.parse_args()
     urls = args.url
     name = args.output or 'output.epub'
     title = args.title
+    author = args.author
     tags = args.tag
-    taskItems = TaskItems(errors404=SimpleQueue())
+    store_images = args.images
+    cover = args.cover
+    taskItems = TaskItems(errors404=SimpleQueue(), store_images=store_images)
     documents = []
     with ThreadPoolExecutor() as executor:
         try:
@@ -130,11 +137,13 @@ def main(cli_args):
             concurrent.futures.wait(documents, timeout=10*60)
             docs = [d.result() for d in documents]
             docs = [d for d in docs if d]
-
+            merge_name = name if name.endswith('.epub') else (rand_name() + '.epub')
             merge_args = ['calibre-debug', '--run-plugin', 'EpubMerge', '--',
-                '-N', '-o', name]
+                '-N', '-o', merge_name]
             if title:
                 merge_args += ['-t', title]
+            if author:
+                merge_args += ['-a', author]
             for tag in tags:
                 merge_args += ['-g', tag]
             merge_args += docs
@@ -143,6 +152,19 @@ def main(cli_args):
             if res.returncode:
                 print('final merge failed')
                 return 1
+            if name != merge_name:
+                try:
+                    convert_args = ['ebook-convert', merge_name, name]
+                    print(' '.join(convert_args))
+                    res = subprocess.run(convert_args, stdout=subprocess.DEVNULL)
+                    if res.returncode:
+                        print('final conversion failed')
+                        return res.returncode
+                finally:
+                    try:
+                        os.remove(merge_name)
+                    except:
+                        pass
             return 0
         #cleanup temp files
         finally:
