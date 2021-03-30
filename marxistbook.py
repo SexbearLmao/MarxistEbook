@@ -4,10 +4,18 @@ import requests
 import random
 import subprocess
 import os
+from sys import argv
 from multiprocessing import Pool
 
 def rand_name():
     return '%030x' % random.randrange(16**30)
+
+def all_children(node):
+    for child in node.getchildren():
+        for item in all_children(child):
+            yield item
+        yield child
+    yield node
 
 def download_chapter(url):
     print('downloading {}'.format(url))
@@ -18,12 +26,15 @@ def download_chapter(url):
     root = document_fromstring(response.text)
 
     #find and remove footer
-    comments = root.xpath('//comment()')
-    foot = next(filter(lambda e: 't2h-foot ' in e.text, comments))
-    parent = foot.getparent()
-    prev = foot.getprevious()
-    while prev.getnext() is not None:
-        parent.remove(prev.getnext())
+    try:
+        comments = root.xpath('//comment()')
+        foot = next(filter(lambda e: 't2h-foot ' in e.text, comments))
+        parent = foot.getparent()
+        prev = foot.getprevious()
+        while prev.getnext() is not None:
+            parent.remove(prev.getnext())
+    except StopIteration:
+        pass
     
     randname = rand_name()
     htmlname = randname + '.html'
@@ -44,20 +55,14 @@ def download_book(url):
     response = requests.get(url)
     if response.status_code != 200:
         print('failed to download page')
+        #this shouldn't exit
         exit(1)
     root = document_fromstring(response.text)
 
     #I think this finds multi-page docs
-    spans = root.xpath('//span')
-    toc = None
-    try:
-        toc = next(filter(lambda e: 'toc' in e.classes, spans))
-    except StopIteration:
-        pass
-    if toc is None:
-        #TODO this will download page a second time, allow passing text directly
-        return download_chapter(url)
-    else:
+    tocs = [node for node in all_children(root) if 'toc' in node.classes]
+    
+    if tocs:
         #TODO make better
         title = [e for e in root.xpath('//h3') if 'title' in e.classes][0].text
 
@@ -81,9 +86,14 @@ def download_book(url):
         for f in res:
             os.remove(f)
         return temp_name
+    else:
+        #TODO this will download page a second time, allow passing text directly
+        return download_chapter(url)
+    else:
+        
         
 
-def main():
+def main(cli_args):
     parser = ArgumentParser()
     parser.add_argument('-o', '--output', help='name of output file', dest='output')
     #parser.add_argument('-i', '--input', help='input urls', dest='input', action='append')
@@ -94,7 +104,7 @@ def main():
     parser.add_argument('-g', '--tag', help='apply a tag', action='append')
     parser.add_argument('-l', '--language', help='set language', default=None)
     parser.add_argument('url', help='urls to download', nargs='+')
-    args = parser.parse_args()
+    args = parser.parse_args(cli_args)
     #inp = args.input
     urls = args.url
     outp = args.output or 'output.epub'
@@ -104,6 +114,12 @@ def main():
     description = args.description
     tags = args.tag
     lanugage = args.language
+
+    for i in range(len(urls)-1):
+        if urls[i] in urls[i+1:]:
+            print('duplicate url:')
+            print(urls[i])
+            return 1
 
     output_extension = os.path.split(outp)[1]
 
@@ -143,6 +159,7 @@ def main():
             raise Exception('final conversion returned {}'.format(sub.returncode))
         os.remove(temp_name)
     print('created {}'.format(outp))
+    return 0
 
 if __name__ == '__main__':
-    main()
+    exit(main(argv))
