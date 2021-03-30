@@ -138,6 +138,7 @@ def main(cli_args):
     parser.add_argument('-I', '--images', help='NOT IMPLEMENTED also attempt to download any images', action='store_true')
     parser.add_argument('-C', '--auto-cover', help='NOT IMPLEMENTED generate an automatic cover', action='store_true', dest='cover')
     parser.add_argument('-T', '--no-trim', help="don't try to trim footer at bottom of chapters", action='store_false', dest='trim')
+    #TODO add arguments to control ToC
     parser.add_argument('url', help='url to download', nargs='+')
     #args = parser.parse_args(cli_args)
     args = parser.parse_args()
@@ -166,12 +167,13 @@ def main(cli_args):
                 return 1
             docs = [d.result() for d in documents]
             docs = [d for d in docs if d]
-            if cover or not cover.endswith('.epub'):
-                merge_name = rand_name() + 'epub'
+            if cover or not name.endswith('.epub'):
+                merge_name = rand_name() + '.epub'
             else:
+                #no final conversion step
                 merge_name = name
             merge_args = ['calibre-debug', '--run-plugin', 'EpubMerge', '--',
-                '-N', '-o', merge_name]
+                '-o', merge_name]
             if title:
                 merge_args += ['-t', title]
             if author:
