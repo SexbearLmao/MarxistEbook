@@ -2,6 +2,15 @@
 
 Use this script alongside Calibre to pull any number of articles from [Marxists.org](marxists.org) and convert them into a single ebook.
 
+#NOTE:
+
+This is very much a work in progress, and may break frequently.
+The index_crawler.py script seems much more successful so I'm working on that now.
+It's roughly the same thing but the way it identifies chapters works better with various authors.
+
+Rather than me documenting the ever-changing CLI, for now just use "python3 index_crawler.py --help". Note that there are placeholder arguments for some unimplemented features.
+
+
 ##Requirements
 
 In addition to the python libraries listed in requirements.txt, this script requires [Calibre](https://calibre-ebook.com/) and its add-on [EpubMerge](https://www.mobileread.com/forums/showthread.php?t=169744). Right now the executables "ebook-merge" and "calibre-debug" must be in your path.
