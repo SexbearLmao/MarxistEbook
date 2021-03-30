@@ -11,15 +11,36 @@ import os.path
 from queue import SimpleQueue, Empty
 
 class TaskItems:
-    def __init__(self, errors404: SimpleQueue, store_images: bool =False):
+    def __init__(self, errors404: SimpleQueue, store_images: bool =False,
+        trim: bool =True):
         self.errors404 = errors404
         self.store_images = store_images
+        self.trim = trim
 
 def rand_name():
     return '%030x' % random.randrange(16**30)
 
-def clip_chapter(root):
-    pass
+def trim_chapter(root):
+    #find by comment
+    try:
+        comments = root.xpath('//comment()')
+        foot = next(filter(lambda e: 't2h-foot ' in e.text, comments))
+        parent = foot.getparent()
+        prev = foot.getprevious()
+        while prev.getnext() is not None:
+            parent.remove(prev.getnext())
+    except StopIteration:
+        pass
+    #find by class
+    try:
+        pars = root.xpath('//p')
+        footers = [foot for foot in pars if 'footer' in foot.classes]
+        for foot in footers:
+            parent = foot.getparent()
+            parent.remove(foot)
+    except StopIteration:
+        pass
+    
 
 def process_chapter(url, taskItems: TaskItems =None):
     assert(url)
@@ -38,7 +59,8 @@ def process_chapter(url, taskItems: TaskItems =None):
             print('received error code {}'.format(resp.status_code))
             return None
         root = document_fromstring(resp.text)
-        clip_chapter(root)
+        if taskItems and taskItems.trim:
+            trim_chapter(root)
         with open(html_name, 'wb') as f:
             f.write(tostring(root))
         convert_args = ['ebook-convert', html_name, epub_name, '--no-default-epub-cover']
@@ -115,6 +137,7 @@ def main(cli_args):
     parser.add_argument('-g', '--tag', help='apply a tag', action='append')
     parser.add_argument('-I', '--images', help='also attempt to download any images', action='store_true')
     parser.add_argument('-C', '--auto-cover', help='generate an automatic cover', action='store_true', dest='cover')
+    parser.add_argument('-T', '--no-trim', help="don't try to trim footer at bottom of chapters", action='store_false', dest='trim')
     parser.add_argument('url', help='url to download', nargs='+')
     #args = parser.parse_args(cli_args)
     args = parser.parse_args()
@@ -125,7 +148,9 @@ def main(cli_args):
     tags = args.tag
     store_images = args.images
     cover = args.cover
-    taskItems = TaskItems(errors404=SimpleQueue(), store_images=store_images)
+    trim = args.trim
+    taskItems = TaskItems(errors404=SimpleQueue(), store_images=store_images,
+        trim=trim)
     documents = []
     with ThreadPoolExecutor() as executor:
         try:
@@ -134,10 +159,17 @@ def main(cli_args):
                     documents.append(executor.submit(process_volume, url=item, taskItems=taskItems))
                 else:
                     documents.append(executor.submit(process_chapter, url=item, taskItems=taskItems))
-            concurrent.futures.wait(documents, timeout=10*60)
+            try:
+                concurrent.futures.wait(documents, timeout=10*60)
+            except concurrent.futures.TimeoutError:
+                print('Timeout while waiting for tasks')
+                return 1
             docs = [d.result() for d in documents]
             docs = [d for d in docs if d]
-            merge_name = name if name.endswith('.epub') else (rand_name() + '.epub')
+            if cover or not cover.endswith('.epub'):
+                merge_name = rand_name() + 'epub'
+            else:
+                merge_name = name
             merge_args = ['calibre-debug', '--run-plugin', 'EpubMerge', '--',
                 '-N', '-o', merge_name]
             if title:
@@ -153,6 +185,7 @@ def main(cli_args):
                 print('final merge failed')
                 return 1
             if name != merge_name:
+                #TODO to generate cover, run an epub conversion here
                 try:
                     convert_args = ['ebook-convert', merge_name, name]
                     print(' '.join(convert_args))
