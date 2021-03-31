@@ -20,6 +20,13 @@ class TaskItems:
 def rand_name():
     return '%030x' % random.randrange(16**30)
 
+#quote cli args that contain strings so they display nicely when printing
+#does not affect the actual arguments sent to subprocess.run
+def quote_arg(s):
+    if ' ' in s:
+        return '"{}"'.format(s)
+    return s
+
 def trim_chapter(root):
     #find by comment
     try:
@@ -64,7 +71,7 @@ def process_chapter(url, taskItems: TaskItems =None):
         with open(html_name, 'wb') as f:
             f.write(tostring(root))
         convert_args = ['ebook-convert', html_name, epub_name, '--no-default-epub-cover']
-        print(' '.join(convert_args))
+        print(' '.join(map(quote_arg, convert_args)))
         res = subprocess.run(convert_args, stdout=subprocess.DEVNULL)
         if res.returncode != 0:
             return None
@@ -116,7 +123,7 @@ def process_volume(url, taskItems: TaskItems =None):
         vol_name = rand_name() + '.epub'
         merge_args = ['calibre-debug', '--run-plugin', 'EpubMerge', '--',
             '-N', '-o', vol_name] + chapter_names
-        print(' '.join(merge_args))
+        print(' '.join(map(quote_arg, merge_args)))
         res = subprocess.run(merge_args, stdout=subprocess.DEVNULL)
         if res.returncode:
             return None
@@ -133,8 +140,9 @@ def main(cli_args):
     parser = ArgumentParser()
     parser.add_argument('-o', '--output', help='output file name', type=str)
     parser.add_argument('-t', '--title', help='ebook title', type=str)
-    parser.add_argument('-a', '--author', help="DOESN'T WORK ebook author", type=str)
+    parser.add_argument('-a', '--author', help="ebook author", type=str, action='append')
     parser.add_argument('-g', '--tag', help='apply a tag', action='append')
+    parser.add_argument('-r', '--rating', help='set the rating', type=int, default=None, choices=range(1,6), metavar='[1-5]')
     parser.add_argument('-I', '--images', help='NOT IMPLEMENTED also attempt to download any images', action='store_true')
     parser.add_argument('-C', '--auto-cover', help='NOT IMPLEMENTED generate an automatic cover', action='store_true', dest='cover')
     parser.add_argument('-T', '--no-trim', help="don't try to trim footer at bottom of chapters", action='store_false', dest='trim')
@@ -145,14 +153,17 @@ def main(cli_args):
     urls = args.url
     name = args.output or 'output.epub'
     title = args.title
-    author = args.author
+    authors = args.author
     tags = args.tag
     store_images = args.images
     cover = args.cover
     trim = args.trim
+    rating = args.rating
     taskItems = TaskItems(errors404=SimpleQueue(), store_images=store_images,
         trim=trim)
+    #TODO clearer variable names
     documents = []
+    docs = []
     with ThreadPoolExecutor() as executor:
         try:
             for item in urls:
@@ -167,6 +178,7 @@ def main(cli_args):
                 return 1
             docs = [d.result() for d in documents]
             docs = [d for d in docs if d]
+            #epub[] => epub
             if cover or not name.endswith('.epub'):
                 merge_name = rand_name() + '.epub'
             else:
@@ -174,23 +186,25 @@ def main(cli_args):
                 merge_name = name
             merge_args = ['calibre-debug', '--run-plugin', 'EpubMerge', '--',
                 '-o', merge_name]
-            if title:
-                merge_args += ['-t', title]
-            if author:
-                merge_args += ['-a', author]
-            for tag in tags:
-                merge_args += ['-g', tag]
             merge_args += docs
-            print(' '.join(merge_args))
+            print(' '.join(map(quote_arg, merge_args)))
             res = subprocess.run(merge_args, stdout=subprocess.DEVNULL)
             if res.returncode:
                 print('final merge failed')
                 return 1
             if name != merge_name:
-                #TODO to generate cover, run an epub conversion here
                 try:
+                    #epub => output type
                     convert_args = ['ebook-convert', merge_name, name]
-                    print(' '.join(convert_args))
+                    if authors:
+                        convert_args += ['--authors', '&'.join(authors)]
+                    if title:
+                        convert_args += ['--title', title]
+                    if tags:
+                        convert_args += ['--tags', ','.join(tags)]
+                    if rating:
+                        convert_args += ['--rating', str(rating)]
+                    print(' '.join(map(quote_arg, convert_args)))
                     res = subprocess.run(convert_args, stdout=subprocess.DEVNULL)
                     if res.returncode:
                         print('final conversion failed')
